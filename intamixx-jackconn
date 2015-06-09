@@ -1,0 +1,32 @@
+system:capture_1
+ xwax:asus_deck2_timecode_L
+system:capture_2
+ xwax:asus_deck2_timecode_R
+nvidia_alsa_in:capture_1
+ xwax:nvidia_deck1_timecode_L
+nvidia_alsa_in:capture_2
+ xwax:nvidia_deck1_timecode_R
+jack_rack:out_1
+ bridge-vumeter:meter_1
+ bridge-dpm:meter_1
+ system:playback_1
+jack_rack:out_2
+ bridge-vumeter:meter_2
+ bridge-dpm:meter_2
+ system:playback_2
+jack_rack:out_3
+ bridge-vumeter:meter_1
+ bridge-dpm:meter_1
+ nvidia_alsa_out:playback_1
+jack_rack:out_4
+ bridge-vumeter:meter_2
+ bridge-dpm:meter_2
+ nvidia_alsa_out:playback_2
+xwax:nvidia_deck1_playback_L
+ jack_rack:in_3
+xwax:nvidia_deck1_playback_R
+ jack_rack:in_4
+xwax:asus_deck2_playback_L
+ jack_rack:in_1
+xwax:asus_deck2_playback_R
+ jack_rack:in_2

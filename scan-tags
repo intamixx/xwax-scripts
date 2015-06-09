@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# Wrapper around xwax scan script which adds BPM field
+#
+
+PATHNAME="$1"
+SCAN=/root/libexec/xwax-scan
+
+IFS=$'\t'
+"$SCAN" "$1" | while read FILE ARTIST TITLE; do
+	BPM=""
+	case "$FILE" in
+	*.[Ff][Ll][Aa][Cc])
+		BPM=`metaflac --show-tag=BPM "$FILE" | sed -e 's/BPM=//'`
+		;;
+	*.[Mm][Pp]3)
+		BPM=`id3v2 -l "$FILE" | sed -n 's/^TBPM.*: \([0-9\.]\+\)/\1/p'`
+		;;
+	*.[Mm][Pp]3)
+		BPM=`vorbiscomment "$FILE" | sed -n 's/^BPM=//p'`
+		;;
+        *.[Ww][Aa][Vv])
+		BPM=""
+                ;;
+	esac
+
+	printf "%s\t%s\t%s" "$FILE" "$ARTIST" "$TITLE"
+
+	if [ -n "$BPM" ]; then
+		printf "\t%s" "$BPM"
+	else
+		printf "\t%s"
+	fi
+
+	printf "\n"
+done

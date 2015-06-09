@@ -1,0 +1,235 @@
+#!/bin/sh
+#
+# Analyse an audio file and add BPM metadata
+#
+
+set -e
+
+usage()
+{
+	cat <<END
+bpm-tag v1
+
+Usage: bpm-tag [options] <directory>
+Tag an audio file with tempo (in beats-per-minute, BPM)
+
+  -f   Ignore existing BPM value and re-BPM tag all files
+  -l   List BPM only, don't tag
+  -m   Minimum detected BPM
+  -x   Maximum detected BPM
+  -h   Display this help message and exit
+
+END
+}
+
+# Parse command line arguments
+
+FORCE=false
+WRITE=true
+LIST=false
+ARGS="-m 80 -x 172"
+
+PATHNAME=$1
+TOTALCONV=0
+COUNT=1
+LAME=/usr/bin/lame
+OGGDEC=/usr/bin/oggdec
+FLAC=/usr/bin/flac
+BPMPROG=/opt/xwax/bpm-tools-0.3/bpm
+SOX=/usr/bin/sox
+TMPDIR="/tmp"
+
+while getopts "fhlm:x:" OPT; do
+	case "$OPT" in
+	f)
+		FORCE=true
+		;;
+	n)
+		WRITE=false
+		;;
+	l)
+		LIST=true
+		;;
+	m)
+		ARGS="$ARGS -m $OPTARG"
+		;;
+	x)
+		ARGS="$ARGS -x $OPTARG"
+		;;
+	h)
+		usage
+		exit 0
+		;;
+	?)
+		exit 1
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ -z "$1" ]; then
+	usage >&2
+	exit 1
+fi
+
+set -u
+
+PATHNAME="$1"
+shift
+
+function BPMTAG {
+	echo "	Calculating BPM ..."
+	RESULT=""
+
+	# Analyse and Decode audio file into WAV
+	case "$filename" in
+	*.[Ff][Ll][Aa][Cc])
+		# Test for valid FLAC File
+		RESULT=`file "$filename"`
+		if [[ $RESULT =~ FLAC\ audio ]]; then
+			$FLAC "$filename" -f --decode -o "$TMPDIR/$tmpfilename.wav"
+		else
+			echo "	Not a valid FLAC file! Skipping ..."
+		fi
+		;;
+	*.[Mm][Pp]3)
+		# Test for valid MP3 File
+		RESULT=`file "$filename"`
+		if [[ $RESULT =~ XWD|Audio\ file|MPEG\ ADTS|GLS ]]; then
+			$LAME "$filename" --decode "$TMPDIR/$tmpfilename.wav"
+		else
+			echo "	Not a valid MP3 file! Skipping ..."
+		fi
+		;;
+	*.[Oo][Gg][Gg])
+		# Test for valid OGG File
+		RESULT=`file "$filename"`
+		if [[ $RESULT =~ Vorbis\ audio ]]; then
+			$OGGDEC "$filename" -o "$TMPDIR/$tmpfilename.wav"
+		else
+			echo "	Not a valid OGG file! Skipping ..."
+		fi
+		;;
+	*)
+	echo "$filename: don't know how to tag this type of file"
+	#exit 1
+	esac
+	echo
+
+	if [ -e "$TMPDIR/$tmpfilename.wav" ]; then
+	
+		BPM=`$SOX -V1 "$TMPDIR/$tmpfilename.wav" -r 44100 -e float -c 1 -t raw - | $BPMPROG $ARGS`
+		BPMROUND=`printf "%.1f\n" "$BPM"`
+
+		echo "	Tagging $filename: $BPMROUND BPM"
+		# Write a BPM tag
+		case "$filename" in
+		*.[Ff][Ll][Aa][Cc])
+			metaflac --remove-tag=BPM --set-tag="BPM=$BPMROUND" "$filename"
+			touch -m -d "$STAT" "$filename"
+			;;
+		*.[Mm][Pp]3)
+			id3v2 --TBPM "$BPMROUND" "$filename"
+			touch -m -d "$STAT" "$filename"
+			;;
+		*.[Oo][Gg][Gg])
+			vorbiscomment -at "BPM=$BPMROUND" "$filename"
+			touch -m -d "$STAT" "$filename"
+			;;
+		*)
+		echo "$filename: don't know how to tag this type of file"
+		#exit 1
+		esac
+
+		# Clean Up
+		rm "$TMPDIR/$tmpfilename.wav"
+		tmpfilename=""
+
+	else
+		echo "	$filename: Could not decode stream"
+	fi
+}
+
+
+echo "--------------"
+echo "- BPM tagger -"
+echo "--------------"
+
+echo "Working Directory $PATHNAME"; echo
+
+if [ -d "$PATHNAME" ]; then
+
+	echo "Scanning for Music Files ..."
+	TOTALCONV=`find -L "$PATHNAME" -type f | grep -iE '\.(mp3|flac|ogg)$' | wc -l`
+
+	find -L "$PATHNAME" -type f | grep -iE '\.(mp3|flac|ogg)$' | while read filename
+		do
+			BPM=""
+			BPMROUND=""
+			TYPE=""
+			SUFFIX=""
+			tmpfilename=""
+			STAT=""
+			echo "----------------------------------------------------------"
+
+			case "$filename" in
+			*.[Ff][Ll][Aa][Cc])
+				BPM=`metaflac --show-tag=BPM "$filename" | sed -e 's/BPM=//'`
+				TYPE="FLAC"
+				SUFFIX=".flac"
+				tmpfilename=`basename "$filename"`
+				tmpfilename=`echo "$tmpfilename" | sed -e 's/'$SUFFIX'//gi'`
+				STAT=`stat -c %y "$filename"`
+				;;
+			*.[Mm][Pp]3)
+				BPM=`id3v2 -l "$filename" | sed -n 's/^TBPM.*: \([0-9\.]\+\)/\1/p'`
+				TYPE="MP3"
+				SUFFIX=".mp3"
+				tmpfilename=`basename "$filename"`
+				tmpfilename=`echo "$tmpfilename" | sed -e 's/'$SUFFIX'//gi'`
+				STAT=`stat -c %y "$filename"`
+				;;
+			*.[Oo][Gg][Gg])
+				BPM=`vorbiscomment "$filename" | sed -n 's/^BPM=//p' | tail -1`
+				TYPE="OGG"
+				SUFFIX=".ogg"
+				tmpfilename=`basename "$filename"`
+				tmpfilename=`echo "$tmpfilename" | sed -e 's/'$SUFFIX'//gi'`
+				STAT=`stat -c %y "$filename"`
+				;;
+			*)
+				echo "$filename: file extension not known"
+				echo
+				BPM=""
+				tmpfilename=""
+				#exit 1
+				;;
+			esac
+
+			echo "$COUNT / $TOTALCONV	Working on $TYPE $filename ..."
+			COUNT=$(($COUNT+1))
+			echo
+
+			if [ $TYPE ]; then
+
+			# Don't overwrite an existing BPM tag
+				if [ -n "$BPM" ] && ! $FORCE; then  # nonzero length
+				echo "	$filename: already tagged, $BPM BPM"
+				#exit 1
+
+				elif [ -n "$BPM" ] || [ -z "$BPM" ] && $FORCE; then
+				BPMTAG
+
+				elif [ -z "$BPM" ] && $LIST; then # length zero
+				echo "	$filename: No BPM tag"
+
+				else
+				BPMTAG
+
+				fi
+				echo
+			fi
+		done
+fi
+
+
+exit

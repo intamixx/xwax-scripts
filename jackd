@@ -1,0 +1,151 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# chkconfig: - 95 15
+# Provides:       Jackd Server
+# Required-Start:
+# Required-Stop:
+# Default-Start:  3 4 5
+# Default-Stop:
+# Description:    Jackd Server
+### END INIT INFO
+
+# Source function library.
+#if [ -f /etc/init.d/functions ] ; then
+#  . /etc/init.d/functions
+#elif [ -f /etc/rc.d/init.d/functions ] ; then
+#  . /etc/rc.d/init.d/functions
+#else
+#  exit 1
+#fi
+
+# Source function library.
+. /intamixx/functions
+
+# Intamixx Config.
+. /intamixx/intamixxdj.conf
+
+cd /tmp
+
+BIN_DIR="/usr/bin"
+ARGS="-R -P89 -dalsa -dhw:0 -r96000 -p256 -n2 -S -Xseq"
+USER=intamixx
+
+# List process here
+Process="jackd"
+DisplayName="JACKd Server"
+
+# Builtin functions need to add terminating newline
+function psuccess
+{
+        success; echo ""
+}
+function pfailure
+{
+        failure; echo ""
+}
+function pwarning
+{
+        warning; echo ""
+}
+
+function start
+{
+
+        for x in $Process; do
+                if [[ -x $BIN_DIR/$x ]]; then
+                        if [ -n "`/usr/sbin/pidof $x`" ];
+                                then
+                                        echo -n "$DisplayName is already running."
+                                else
+                                        echo "Starting $DisplayName..."
+					#if [ -e "$DEV" ]
+					#then
+                                        #	$BIN_DIR/$x > $DEV &
+					#else
+                                        	$BIN_DIR/$x $ARGS &
+					#fi
+			fi
+
+			sleep 5
+
+			if [ -n "`/usr/sbin/pidof $x`" ];
+				then
+					psuccess
+					retcode=0
+				else
+					pfailure
+					retcode=1
+                        fi
+                fi
+        done
+}
+
+function stop
+{
+
+        for x in $Process; do
+                if [[ -x $BIN_DIR/$x ]]; then
+                        if [ -n "`/usr/sbin/pidof $x`" ];
+                                then
+                                        echo "Stopping $DisplayName..."
+                                        pkill -9 $x
+                                else
+                                        echo "$DisplayName is already stopped."
+                        fi
+
+			sleep 1
+
+			if [ -n "`/usr/sbin/pidof $x`" ];
+				then
+					pfailure
+					retcode=1
+				else
+					psuccess
+					retcode=0
+                        fi
+                fi
+        done
+}
+
+function status
+{
+        for x in $Process; do
+                if [[ -x $BIN_DIR/$x ]]; then
+                        if [  -n "`/usr/sbin/pidof $x`" ];
+                                then
+                                        echo "$DisplayName is running"
+					psuccess
+					retcode=0
+                                else
+                                        echo "$DisplayName is stopped"
+					pfailure
+					retcode=1
+                        fi
+                fi
+        done
+}
+
+function usage
+{
+        echo "Usage: $0 (start|stop|restart|status)"
+}
+
+case $1 in
+        start)
+                start
+                ;;
+        stop)
+                stop
+                ;;
+        restart)
+		stop && start
+                ;;
+        status)
+                status
+                ;;
+        *)
+                usage
+                retcode=1
+esac
+exit $retcode
+ 

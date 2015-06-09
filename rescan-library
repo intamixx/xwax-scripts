@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# rescan-library: This script will go through all sub-directories immediately under a main directory 
+# 		  to generate playlist files for use with xwax.
+#		  This file will dump the playlist files to a given directory.
+#		  Requires scan-tags & xwax-scan to operate.
+
+XWAXSCANTAGS="/intamixx/scan-tags"
+PLAYLIST_DIR="/opt/media/playlists"
+
+usage()
+{
+        cat <<END
+rescan-library v1 (C) Copyright 2012 Matt Singh
+
+Usage: rescan-library <directory>
+Outputs separate multiple xwax playlists scanned recursively under directory to $PLAYLIST_DIR
+	-s scan single specified directory recursively and create a single playlist
+
+END
+}
+
+while getopts "sh" OPT; do
+	case "$OPT" in
+	s)
+	single=TRUE
+	;;
+	h)
+	usage
+	exit 0
+	;;
+	?)
+	exit 1
+	esac
+done
+shift $((OPTIND - 1))
+
+PATHNAME=$1
+
+	if [ -z "$1" ]; then
+	        usage >&2
+	        exit 1
+	fi
+
+	if [ -d $PLAYLIST_DIR ]; then
+		echo "Xwax playlist output directory found - $PLAYLIST_DIR"
+	else
+		echo "Xwax playlist output directory not found"
+		exit
+	fi
+
+echo "--------------"
+echo "- Rescan Lib -"
+echo "--------------"
+
+echo "Working Directory $PATHNAME";
+echo "Playlist Directory $PLAYLIST_DIR"; echo
+
+if [ -d "$PATHNAME" ]; then
+
+        echo "Scanning for Directories ..."
+	if [ $single ]; then
+		# Get listing of under PATHNAME
+        	TOTALDIRS=`find -L "$PATHNAME" -type d | wc -l`
+		echo "Total Directories = $TOTALDIRS"
+		echo
+		echo "--------------------------------------"
+		echo "$directoryname"
+		PLAYLIST_NAME=`basename "$PATHNAME"`
+		echo "	Creating playlist $PLAYLIST_NAME.pls"
+		$XWAXSCANTAGS "$PATHNAME" > "$PLAYLIST_DIR/$PLAYLIST_NAME.pls"
+		$XWAXSCANTAGS "$PATHNAME"
+	else
+		# Get listing of immediate directories under PATHNAME (excluding itself)
+        	TOTALDIRS=`find -L "$PATHNAME" -mindepth 1 -maxdepth 1 -type d | wc -l`
+		echo "Total Directories = $TOTALDIRS"
+		find -L "$PATHNAME" -mindepth 1 -maxdepth 1 -type d | while read directoryname
+
+		do
+			echo
+			echo "--------------------------------------"
+			echo "$directoryname"
+			PLAYLIST_NAME=`basename "$directoryname"`
+			echo "	Creating playlist $PLAYLIST_NAME.pls"
+			$XWAXSCANTAGS "$directoryname" > "$PLAYLIST_DIR/$PLAYLIST_NAME.pls"
+			$XWAXSCANTAGS "$directoryname"
+		done
+	fi
+fi
